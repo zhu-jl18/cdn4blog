@@ -1,0 +1,102 @@
+name: Deploy to Vercel
+
+on:
+  push:
+    branches: [ main ]
+    paths: 
+      - 'music/**'  # 只在音乐文件变化时触发
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          
+      - name: Install Vercel CLI
+        run: npm install -g vercel
+        
+      - name: Create Vercel config
+        run: |
+          # 创建 vercel.json 配置文件
+          cat > vercel.json << 'EOF'
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "music/**/*",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/music/(.*)",
+      "dest": "/music/$1"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/music/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, HEAD, OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Origin, X-Requested-With, Content-Type, Accept, Range"
+        }
+      ]
+    }
+  ]
+}
+EOF
+          
+          # 创建 package.json
+          cat > package.json << 'EOF'
+{
+  "name": "cdn4blog",
+  "version": "1.0.0",
+  "description": "CDN for blog music files",
+  "private": true
+}
+EOF
+          
+      - name: Deploy to Vercel
+        if: env.VERCEL_TOKEN != ''
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          # 登录并部署
+          echo "$VERCEL_TOKEN" | vercel login --protocol oauth
+          vercel --prod --token "$VERCEL_TOKEN"
+          
+      - name: Manual deployment info
+        if: env.VERCEL_TOKEN == ''
+        run: |
+          echo "⚠️ Vercel token not configured"
+          echo "To enable auto-deployment:"
+          echo "1. Go to your Vercel account settings"
+          echo "2. Create a new token"
+          echo "3. Add it as a secret named VERCEL_TOKEN in this repository"
+          echo "4. Also add VERCEL_ORG_ID and VERCEL_PROJECT_ID"
+          echo ""
+          echo "For manual deployment:"
+          echo "1. Link this repository to Vercel"
+          echo "2. Vercel will auto-deploy on push"
